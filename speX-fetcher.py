@@ -2,7 +2,7 @@
 """
 Created on Sat Sep 25 14:42:30 2021
 
-@author: Marbalza
+@author: Marbalza2
 """
 
 import requests
