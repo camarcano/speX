@@ -110,8 +110,8 @@ def calc_speX(df, IP_limit):
     
     return speX
 
-sdate = '2022-09-01'
-enddate = '2022-10-31'
+sdate = '2022-01-01'
+enddate = '2022-12-31'
 #date.today() - timedelta(1)
 #enddate = enddate.strftime("%Y-%m-%d")
 IP = 0 
