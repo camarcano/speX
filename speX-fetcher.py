@@ -6,10 +6,12 @@ Created on Sat Sep 25 14:42:30 2021
 """
 
 import requests
+import datetime
 from datetime import date, timedelta
 from bs4 import BeautifulSoup
 import pandas as pd
 import lxml
+import openpyxl
 
 
 
@@ -110,19 +112,39 @@ def calc_speX(df, IP_limit):
     
     return speX
 
-sdate = '2023-01-01'
-enddate = '2023-12-31'
+sdate = '2023-03-30'
+enddate = '2023-04-10'
+IP = 0 
+date_format = "%Y-%m-%d"
+start_date = datetime.datetime.strptime(sdate, date_format)
+end_date = datetime.datetime.strptime(enddate, date_format)
+
+daily = input("Do you want the daily values? ")
+writer = pd.ExcelWriter('speX-daily.xlsx', engine='openpyxl') 
+
+if daily.lower()=="y":
+    for single_date in pd.date_range(start=start_date, end=end_date):
+        date_str = single_date.strftime(date_format)
+        speX = parse_array_from_fangraphs_html(date_str, date_str)
+        result = calc_speX(speX, IP)
+        result.to_excel(writer, sheet_name=date_str)
+
+
+
+
+
 #date.today() - timedelta(1)
 #enddate = enddate.strftime("%Y-%m-%d")
-IP = 0 
+
 
 speX = parse_array_from_fangraphs_html(sdate, enddate)
 speX_done = calc_speX(speX, IP)
 
-speX_done.to_csv("speX.csv")
-"""
-sdate = '2022-01-01'
-enddate = '2022-12-01'
+speX_done.to_excel(writer, sheet_name='full')
+
+#sdate = '2022-01-01'
+#enddate = '2022-12-01'
+
 sdate = date.today() - timedelta(16)
 sdate = sdate.strftime("%Y-%m-%d")
 IP = 0 
@@ -130,10 +152,8 @@ IP = 0
 speX = parse_array_from_fangraphs_html(sdate, enddate)
 speX_done = calc_speX(speX, IP)
 
-speX_done.to_csv("speX-15.csv")
+speX_done.to_excel(writer, sheet_name='15 days')
 
-sdate = '2022-01-01'
-enddate = '2022-12-01'
 sdate = date.today() - timedelta(31)
 sdate = sdate.strftime("%Y-%m-%d")
 IP = 0 
@@ -141,10 +161,8 @@ IP = 0
 speX = parse_array_from_fangraphs_html(sdate, enddate)
 speX_done = calc_speX(speX, IP)
 
-speX_done.to_csv("speX-30.csv")
+speX_done.to_excel(writer, sheet_name='30 days')
 
-sdate = '2022-01-01'
-enddate = '2022-12-01'
 sdate = date.today() - timedelta(46)
 sdate = sdate.strftime("%Y-%m-%d")
 IP = 0 
@@ -152,5 +170,68 @@ IP = 0
 speX = parse_array_from_fangraphs_html(sdate, enddate)
 speX_done = calc_speX(speX, IP)
 
-speX_done.to_csv("speX-45.csv")
-"""
+speX_done.to_excel(writer, sheet_name='45 days')
+
+writer.save()
+
+writer.close()
+
+# Open the Excel file
+workbook = openpyxl.load_workbook('speX-daily.xlsx')
+
+# Get the worksheet you want to move
+worksheet = workbook['45 days']
+
+# Get the current sheet index of the worksheet
+sheet_index = workbook.index(worksheet)
+
+# Move the worksheet to the beginning
+workbook.move_sheet(worksheet, offset=-sheet_index)
+
+# Get the worksheet you want to move
+worksheet = workbook['30 days']
+
+# Get the current sheet index of the worksheet
+sheet_index = workbook.index(worksheet)
+
+# Move the worksheet to the beginning
+workbook.move_sheet(worksheet, offset=-sheet_index)
+
+# Get the worksheet you want to move
+worksheet = workbook['15 days']
+
+# Get the current sheet index of the worksheet
+sheet_index = workbook.index(worksheet)
+
+# Move the worksheet to the beginning
+workbook.move_sheet(worksheet, offset=-sheet_index)
+
+# Get the worksheet you want to move
+worksheet = workbook['full']
+
+# Get the current sheet index of the worksheet
+sheet_index = workbook.index(worksheet)
+
+# Move the worksheet to the beginning
+workbook.move_sheet(worksheet, offset=-sheet_index)
+
+# Iterate through each worksheet in the workbook
+for worksheet in workbook.worksheets:
+# Auto-fit all columns in the worksheet
+    for col in worksheet.columns:
+        max_length = 0
+        column = col[0].column_letter  # Get the column name
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        worksheet.column_dimensions[column].width = adjusted_width
+
+
+# Save the changes to the Excel file
+workbook.save('speX-daily.xlsx')
+
+workbook.close()
