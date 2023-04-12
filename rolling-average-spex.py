@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Sep 25 14:42:30 2021
-
-@author: Marbalza2
-"""
-
 import requests
 import datetime
 from datetime import date, timedelta
@@ -12,7 +5,27 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import lxml
 import openpyxl
+from openpyxl import load_workbook
+from fuzzywuzzy import fuzz
+import matplotlib.pyplot as plt
 
+def remove_duplicate_rows(matching_sheets):
+    """
+    Function to remove duplicate rows from the 'matching_sheets' dataframe based on the 'Sheet' column.
+
+    Parameters:
+    matching_sheets (pandas.DataFrame): The dataframe containing the matching sheets and their speX values.
+
+    Returns:
+    pandas.DataFrame: The updated dataframe with duplicate rows removed.
+    """
+    # remove duplicate rows based on the 'Sheet' column
+    matching_sheets = matching_sheets.drop_duplicates(subset=['Sheet'])
+
+    # reset the index of the dataframe
+    matching_sheets = matching_sheets.reset_index(drop=True)
+
+    return matching_sheets
 
 
 def parse_array_from_fangraphs_html(start_date,end_date):
@@ -112,99 +125,44 @@ def calc_speX(df, IP_limit):
     
     return speX
 
-sdate = '2022-01-01'
-enddate = '2022-10-10'
+
+def date_range(start_date, end_date):
+    for n in range(int((pd.to_datetime(end_date) - pd.to_datetime(start_date)).days)+1):
+        yield pd.to_datetime(start_date) + pd.DateOffset(n)
+
+
+# define start and end dates
+sdate = '2023-03-30'
+enddate = '2023-04-12'
 IP = 0 
-date_format = "%Y-%m-%d"
-start_date = datetime.datetime.strptime(sdate, date_format)
-end_date = datetime.datetime.strptime(enddate, date_format)
+speX_file = 'speX-rolling.xlsx'
+# convert start and end dates to datetime objects
+start_date = pd.to_datetime(sdate)
+end_date = pd.to_datetime(enddate)
 
-daily = input("Do you want the daily values? ")
-writer = pd.ExcelWriter('speX-daily.xlsx', engine='openpyxl') 
+writer = pd.ExcelWriter(speX_file, engine='openpyxl') 
 
-if daily.lower()=="y":
-    for single_date in pd.date_range(start=start_date, end=end_date):
-        date_str = single_date.strftime(date_format)
-        speX = parse_array_from_fangraphs_html(date_str, date_str)
-        result = calc_speX(speX, IP)
-        result.to_excel(writer, sheet_name=date_str)
-
-
-
-
-
-#date.today() - timedelta(1)
-#enddate = enddate.strftime("%Y-%m-%d")
-
+# loop through date range
+for single_date in date_range(sdate, enddate):
+    # calculate dataframe for each date
+    #df = calc_speX(df, IP_limit)
+    temp_date = single_date.strftime('%Y-%m-%d')
+    print(f"Results for {temp_date}:")
+    #print(df)
+    speX = parse_array_from_fangraphs_html(sdate, temp_date)
+    result = calc_speX(speX, IP)
+    result.to_excel(writer, sheet_name=temp_date)
 
 speX = parse_array_from_fangraphs_html(sdate, enddate)
 speX_done = calc_speX(speX, IP)
 
 speX_done.to_excel(writer, sheet_name='full')
 
-#sdate = '2022-01-01'
-#enddate = '2022-12-01'
-
-sdate = date.today() - timedelta(16)
-sdate = sdate.strftime("%Y-%m-%d")
-IP = 0 
-
-speX = parse_array_from_fangraphs_html(sdate, enddate)
-speX_done = calc_speX(speX, IP)
-
-speX_done.to_excel(writer, sheet_name='15 days')
-
-sdate = date.today() - timedelta(31)
-sdate = sdate.strftime("%Y-%m-%d")
-IP = 0 
-
-speX = parse_array_from_fangraphs_html(sdate, enddate)
-speX_done = calc_speX(speX, IP)
-
-speX_done.to_excel(writer, sheet_name='30 days')
-
-sdate = date.today() - timedelta(46)
-sdate = sdate.strftime("%Y-%m-%d")
-IP = 0 
-
-speX = parse_array_from_fangraphs_html(sdate, enddate)
-speX_done = calc_speX(speX, IP)
-
-speX_done.to_excel(writer, sheet_name='45 days')
-
 writer.save()
-
 writer.close()
 
 # Open the Excel file
-workbook = openpyxl.load_workbook('speX-daily.xlsx')
-
-# Get the worksheet you want to move
-worksheet = workbook['45 days']
-
-# Get the current sheet index of the worksheet
-sheet_index = workbook.index(worksheet)
-
-# Move the worksheet to the beginning
-workbook.move_sheet(worksheet, offset=-sheet_index)
-
-# Get the worksheet you want to move
-worksheet = workbook['30 days']
-
-# Get the current sheet index of the worksheet
-sheet_index = workbook.index(worksheet)
-
-# Move the worksheet to the beginning
-workbook.move_sheet(worksheet, offset=-sheet_index)
-
-# Get the worksheet you want to move
-worksheet = workbook['15 days']
-
-# Get the current sheet index of the worksheet
-sheet_index = workbook.index(worksheet)
-
-# Move the worksheet to the beginning
-workbook.move_sheet(worksheet, offset=-sheet_index)
+workbook = openpyxl.load_workbook(speX_file)
 
 # Get the worksheet you want to move
 worksheet = workbook['full']
@@ -232,6 +190,111 @@ for worksheet in workbook.worksheets:
 
 
 # Save the changes to the Excel file
-workbook.save('speX-daily.xlsx')
-
+workbook.save(speX_file)
 workbook.close()
+
+wb = load_workbook(filename=speX_file)
+
+# get a list of all the sheet names
+sheet_names = wb.sheetnames
+
+# create a dataframe to store matching sheets and their speX values
+matching_sheets = pd.DataFrame(columns=['Sheet', 'speX'])
+
+# Get the full sheet
+full_sheet = wb['full']
+
+# Get the headers
+headers = [cell.value for cell in full_sheet[1]]
+
+# Create a dictionary of header indices
+header_dict = {header: index for index, header in enumerate(headers)}
+
+# Get the data as a list of lists
+data = [[cell.value for cell in row] for row in full_sheet.iter_rows(min_row=2)]
+
+# Convert the data to a pandas dataframe
+df = pd.DataFrame(data, columns=headers)
+
+# Ask the user for a player name
+player_name = input("Enter a player name: ")
+
+# Search for a match in the "Name" column
+name_column = df['Name']
+match_mask = name_column.str.contains(player_name, case=False)
+if match_mask.any():
+    print("Match found:")
+    matching_row = df[match_mask].iloc[0]
+    print("IP:", matching_row['IP'])
+    print("G:", matching_row['G'])
+    print("GS:", matching_row['GS'])
+    print("K-BB%:", matching_row['K-BB%'])
+    print("pCRA:", matching_row['pCRA'])
+    print("CSW%:", matching_row['CSW%'])
+    print("O-Swing%:", matching_row['O-Swing%'])
+    print("Zone%:", matching_row['Zone%'])
+    print("O-Sw%+Z%:", matching_row['O-Sw%+Z%'])
+    print("speX:", matching_row['speX'])
+
+    # iterate through each sheet and search for the player name
+    for sheet_name in sheet_names:
+        # load sheet into temporary dataframe
+        df = pd.read_excel(speX_file, sheet_name)
+        
+        # check if 'Name' column exists in the temporary dataframe
+        if 'Name' in df.columns:
+            # search for the player name in the 'Name' column
+            name_column = df['Name']
+            for i, row_value in name_column.items():
+                if isinstance(row_value, str) and fuzz.ratio(player_name.lower(), row_value.lower()) > 75:
+                    # add matching sheet and speX value to the dataframe
+                    matching_sheets = matching_sheets.append({'Sheet': sheet_name, 'speX': df.iloc[i]['speX']}, ignore_index=True)
+
+    # print the matching sheets and their speX values
+    print(matching_sheets)
+
+
+else:
+    print("No match found.")
+
+wb.close()
+
+# Drop duplicates, keeping the first occurrence of each
+matching_sheets.drop_duplicates(subset=['Sheet'], keep='first', inplace=True)
+
+# Drop rows where 'Sheet' == 'full'
+matching_sheets = matching_sheets[matching_sheets['Sheet'] != 'full']
+
+# Drop duplicates for the column 'speX', keeping the first occurrence of each
+matching_sheets.drop_duplicates(subset=['speX'], keep='first', inplace=True)
+
+
+# Reset the index
+matching_sheets.reset_index(drop=True, inplace=True)
+
+# Filter dataframe by date range
+#start_date = datetime.datetime.strptime(sdate, '%Y-%m-%d')
+#end_date = datetime.datetime.strptime(enddate, '%Y-%m-%d')
+#matching_sheets = matching_sheets[(matching_sheets['Sheet'] >= start_date) & (matching_sheets['Sheet'] <= end_date)]
+
+# Create graph
+#fig, ax = plt.subplots(figsize=(10, 6))
+#ax.plot(matching_sheets['Sheet'], matching_sheets['speX'])
+#ax.set_ylim([40, 100])
+#ax.set_xlabel('Game Dates')
+#ax.set_ylabel('Accumulated speX')
+#ax.set_title(player_name + '\n' + 'speX through games from ' + sdate + ' to ' + enddate)
+#plt.show()
+
+# Create graph
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(range(1, len(matching_sheets) + 1), matching_sheets['speX'])
+ax.set_xlim([1, len(matching_sheets)])
+ax.set_ylim([40, 100])
+ax.set_xticks(range(1, len(matching_sheets) + 1))
+ax.set_xticklabels([i for i in range(1, len(matching_sheets) + 1)])
+
+ax.set_xlabel('Games')
+ax.set_ylabel('Accumulated speX')
+ax.set_title(player_name + '\n' + 'speX through games from ' + sdate + ' to ' + enddate)
+plt.show()
